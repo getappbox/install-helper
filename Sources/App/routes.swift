@@ -23,7 +23,9 @@ func routes(_ app: Application) throws {
 			}
 		}
 		var manifestURLComponents = URLComponents(string: manifestURLString)
-		manifestURLComponents?.queryItems = manifestURLQueryItems
+		if !manifestURLString.isEmpty {
+			manifestURLComponents?.queryItems = manifestURLQueryItems
+		}
 
 		guard let manifestURL = manifestURLComponents?.url else {
 			throw Abort(.badRequest, reason: "Invalid URL.")
