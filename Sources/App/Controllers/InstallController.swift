@@ -39,7 +39,6 @@ struct InstallController: RouteCollection {
 			throw Abort(.badRequest, reason: "Invalid URL.")
 		}
 
-		var response = try await req.client.get(.init(stringLiteral: manifestURL.absoluteString))
-		return response.removeCrosHeaders()
+		return try await req.client.get(.init(stringLiteral: manifestURL.absoluteString))
 	}
 }

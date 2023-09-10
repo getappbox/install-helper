@@ -19,7 +19,6 @@ struct CORSController: RouteCollection {
 
 	func processRequest(req: Request) async throws -> ClientResponse {
 		let url = try req.query.decode(QueryURL.self).url
-		var response = try await req.client.get(.init(stringLiteral: url))
-		return response.removeCrosHeaders()
+		return try await req.client.get(.init(stringLiteral: url))
 	}
 }
