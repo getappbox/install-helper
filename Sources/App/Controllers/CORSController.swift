@@ -1,5 +1,5 @@
 //
-//  CrosController.swift
+//  CORSController.swift
 //  
 //
 //  Created by Vineet Choudhary on 10/09/23.
@@ -7,7 +7,7 @@
 
 import Vapor
 
-struct CrosController: RouteCollection {
+struct CORSController: RouteCollection {
 	struct QueryURL: Codable {
 		let url: String
 	}
