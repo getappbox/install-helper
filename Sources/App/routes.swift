@@ -5,6 +5,7 @@ func routes(_ app: Application) throws {
         "AppBox Install Service Helper"
     }
 
+	try app.register(collection: CrosController())
 	try app.register(collection: InstallController())
 	try app.register(collection: ReCaptchaController())
 }
