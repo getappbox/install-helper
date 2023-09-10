@@ -1,5 +1,5 @@
 //
-//  EnvironmentExtension.swift
+//  EnvironmentExtensions.swift
 //  
 //
 //  Created by Vineet Choudhary on 10/09/23.
