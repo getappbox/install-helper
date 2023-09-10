@@ -1,33 +1,38 @@
+## AppBox Install Helper
+AppBox middleware service to provide direct access to dropbox file without cors headers.
 
 
-## Install/Update Steps
+## Install Steps
 
-#### Change USER
-
-```
-sudo su vapor
-```
-
-#### Change directory
+Follow these instruction https://docs.vapor.codes/deploy/digital-ocean/#initial-setup
 
 ```
+# Clone (for new install only)
+git clone https://github.com/getappbox/install-helper.git
+
+# Change directory
 cd install-helper
+
+# Create .env file and add ReCAPTCHA secrets
+
+# Run
+swift run App serve --env production
 ```
 
-#### Update code
-
+## Update Steps
 ```
+# Change user (do not run as root user)
+sudo su vapor
+
+# Change directory
+cd install-helper
+
+# Fetch latest changes
 git fetch && git pull
-```
 
-#### Build Release App
-
-```
+# Build release app
 swift build -c release
-```
 
-#### Restart Service
-
-```
+# Restart service
 sudo service installhelper restart
 ```
