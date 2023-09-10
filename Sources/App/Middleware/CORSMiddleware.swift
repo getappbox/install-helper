@@ -10,7 +10,7 @@ import Vapor
 extension CORSMiddleware {
 	static var current: CORSMiddleware {
 		let corsConfiguration = CORSMiddleware.Configuration(
-			allowedOrigin: .any(Environment.corsAllowList),
+			allowedOrigin: .all,
 			allowedMethods: [.GET, .POST, .PUT, .OPTIONS, .DELETE, .PATCH],
 			allowedHeaders: [.accept, .authorization, .contentType, .origin, .xRequestedWith, .userAgent, .accessControlAllowOrigin]
 		)
