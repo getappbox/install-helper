@@ -40,10 +40,6 @@ struct ReCaptchaController: RouteCollection {
 	}
 
 	func verify(req: Request) throws -> EventLoopFuture<ReVerifyResponse> {
-		req.headers.add(name: "Access-Control-Allow-Origin", value: "*")
-		req.headers.add(name: "Access-Control-Allow-Headers", value: "*")
-		req.headers.add(name: "Access-Control-Allow-Methods", value: "POST, OPTIONS")
-
 		let response = try req.query.decode(VerifyReqParams.self).response
 
 		let requestData = ReVerifyRequest(
