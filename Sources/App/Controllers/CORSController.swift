@@ -13,7 +13,7 @@ struct CORSController: RouteCollection {
 	}
 
 	func boot(routes: Vapor.RoutesBuilder) throws {
-		let install = routes.grouped("cros")
+		let install = routes.grouped("cors")
 		install.get(.init(), use: processRequest(req:))
 	}
 
