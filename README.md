@@ -6,33 +6,56 @@ AppBox middleware service to provide direct access to dropbox file without cors 
 
 Follow these instruction https://docs.vapor.codes/deploy/digital-ocean/#initial-setup
 
-```
-# Clone (for new install only)
+### Clone (for new install only)
+```sh
 git clone https://github.com/getappbox/install-helper.git
+```
 
-# Change directory
+### Change directory
+```sh
 cd install-helper
+```
 
-# Create .env file and add ReCAPTCHA secrets
+### Create .env file
+```yml
+RECAPTCHA=""
+TURNSTILE_SITE=""
+TURNSTILE_SECRET=""
+```
 
-# Run
+### Run
+```sh
 swift run App serve --env production
 ```
 
-## Update Steps
+### Create service file
 ```
-# Change user (do not run as root user)
+/etc/systemd/system/installhelper.service
+```
+
+
+## Update Steps
+### Change user (do not run as root user)
+```sh
 sudo su vapor
+```
 
-# Change directory
+### Change directory
+```sh
 cd install-helper
+```
 
-# Fetch latest changes
+### Fetch latest changes
+```sh
 git fetch && git pull
+```
 
-# Build release app
+### Build release app
+```sh
 swift build -c release
+```
 
-# Restart service
+### Restart service
+```sh
 sudo service installhelper restart
 ```
