@@ -23,11 +23,9 @@ struct TurnstileController: RouteCollection {
 
 	struct TurnstileVerifyResponse: Content {
 		let result: Bool
-		let score: Double?
 
 		enum CodingKeys: String, CodingKey {
 			case result = "success"
-			case score
 		}
 	}
 
