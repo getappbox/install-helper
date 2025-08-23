@@ -2,6 +2,9 @@ import Vapor
 
 // configures your application
 public func configure(_ app: Application) async throws {
+    // Load variables from .env files before anything else so Environment.get works locally
+    DotEnvLoader.load(into: app)
+
     // uncomment to serve files from /Public folder
     // app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
 
