@@ -1,5 +1,5 @@
 //
-//  AppInfoController.swift
+//  DBAppInfoController.swift
 //
 //
 //  Created by Vineet Choudhary on 02/09/25.
@@ -7,13 +7,14 @@
 
 import Vapor
 
-struct AppInfoController: RouteCollection {
-	struct QueryURL: Codable {
-		let url: String
-	}
-
+/// A controller to handle requests to the `/appinfo/scl/*` endpoint.
+///
+/// This controller processes requests to the `/appinfo/scl/*` endpoint,
+/// modifies the URL to ensure direct download from Dropbox, and forwards
+/// the request to Dropbox. (https://www.dropbox.com/scl/...)
+struct DBAppInfoController: RouteCollection {
 	func boot(routes: Vapor.RoutesBuilder) throws {
-		let install = routes.grouped("appinfo")
+		let install = routes.grouped("appinfo", "scl")
 		install.get(.catchall, use: processRequest(req:))
 	}
 
@@ -37,7 +38,7 @@ struct AppInfoController: RouteCollection {
 		var components = URLComponents()
 		components.scheme = "https"
 		components.host = "www.dropbox.com"
-		components.path = req.url.path.replacingOccurrences(of: "/appinfo", with: "")
+		components.path = req.url.path.replacingOccurrences(of: "/appinfo/", with: "/")
 		components.queryItems = queryItems
 
 		guard let urlString = components.string else {
