@@ -11,6 +11,5 @@ func routes(_ app: Application) throws {
 	// MARK: - Controller
 	try app.register(collection: CORSController())
 	try app.register(collection: InstallController())
-	try app.register(collection: ReCaptchaController())
-	try app.register(collection: TurnstileController())
+	try app.register(collection: AppInfoController())
 }
