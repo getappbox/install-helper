@@ -17,10 +17,6 @@ extension Environment {
 		return raw
 	}
 
-	static let reCaptchaKey = requiredDecoded("RECAPTCHA")
-	static let turnstileSiteKey = requiredDecoded("TURNSTILE_SITE")
-	static let turnstileSecretKey = requiredDecoded("TURNSTILE_SECRET")
-
 	// MARK: - Hardcoded
 	static let corsAllowList = ["https://web.getappbox.com, https://web2.getappbox.com, http://localhost:8080"]
 }
