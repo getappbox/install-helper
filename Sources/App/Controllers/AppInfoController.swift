@@ -25,7 +25,14 @@ struct AppInfoController: RouteCollection {
 			}
 			return URLQueryItem(name: String(keyValue[0]), value: String(keyValue[1]))
 		} ?? []
-		queryItems.append(URLQueryItem(name: "dl", value: "1"))
+
+		// ensure dl=1 is present to force direct download from Dropbox
+		let dlQueryItem = URLQueryItem(name: "dl", value: "1")
+		if let dlQueryItemIndex = queryItems.firstIndex(where: { $0.name == dlQueryItem.name }) {
+			queryItems[dlQueryItemIndex] = dlQueryItem
+		} else {
+			queryItems.append(dlQueryItem)
+		}
 
 		var components = URLComponents()
 		components.scheme = "https"
