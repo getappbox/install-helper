@@ -16,13 +16,6 @@ git clone https://github.com/getappbox/install-helper.git
 cd install-helper
 ```
 
-### Create .env file
-```yml
-RECAPTCHA=""
-TURNSTILE_SITE=""
-TURNSTILE_SECRET=""
-```
-
 ### Run
 ```sh
 swift run App serve --env production
