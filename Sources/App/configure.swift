@@ -7,6 +7,7 @@ public func configure(_ app: Application) async throws {
 
     // uncomment to serve files from /Public folder
     // app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
+	app.middleware.use(CORSMiddleware.current, at: .beginning)
 
 	if let port = Int(Environment.get("PORT") ?? "2550") {
 		app.http.server.configuration.port = port

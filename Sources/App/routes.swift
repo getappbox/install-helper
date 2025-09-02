@@ -5,11 +5,9 @@ func routes(_ app: Application) throws {
         "AppBox Install Service Helper"
     }
 
-	// MARK: - Middleware
-	app.middleware.use(CORSMiddleware.current, at: .beginning)
-
 	// MARK: - Controller
 	try app.register(collection: CORSController())
 	try app.register(collection: InstallController())
-	try app.register(collection: AppInfoController())
+	try app.register(collection: DBAppInfoController())
+	try app.register(collection: DBUCAppInfoController())
 }
