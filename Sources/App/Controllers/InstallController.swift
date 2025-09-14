@@ -66,64 +66,49 @@ struct InstallController: RouteCollection {
 		}
 
 		do {
-			var format = PropertyListSerialization.PropertyListFormat.xml
-			let plistAny = try PropertyListSerialization.propertyList(from: data, options: [], format: &format)
-			guard var plist = plistAny as? [String: Any] else {
+			let decoder = PropertyListDecoder()
+			let ipaManifest = try decoder.decode(IPAManifest.self, from: data)
+			guard var ipaItem = ipaManifest.items.first, var ipaAsset = ipaItem.assets.first else {
 				return nil
 			}
 
-			// Navigate to the first asset URL
-			guard var items = plist["items"] as? [[String: Any]], !items.isEmpty else {
+			guard var ipaURLComponents = URLComponents(string: ipaAsset.url) else {
 				return nil
 			}
 
-			var firstItem = items[0]
-			guard var assets = firstItem["assets"] as? [[String: Any]], !assets.isEmpty else {
-				return nil
+			if ipaURLComponents.host == "dl.dropboxusercontent.com" {
+				ipaURLComponents.host = "www.dropbox.com"
 			}
 
-			var firstAsset = assets[0]
-			guard let urlString = firstAsset["url"] as? String, var urlComponents = URLComponents(string: urlString) else {
-				return nil
-			}
-
-			// Update host if needed
-			if urlComponents.host == "dl.dropboxusercontent.com" {
-				urlComponents.host = "www.dropbox.com"
-			}
-
-			// ensure dl=1 is present to force direct download from Dropbox
-			var queryItems = urlComponents.queryItems ?? []
+			var queryItems = ipaURLComponents.queryItems ?? []
 			let dlQueryItem = URLQueryItem(name: "dl", value: "1")
-			if let dlQueryItemIndex = queryItems.firstIndex(where: { $0.name == dlQueryItem.name }) {
-				queryItems[dlQueryItemIndex] = dlQueryItem
+			if let index = queryItems.firstIndex(where: { $0.name == "dl" }) {
+				queryItems[index] = dlQueryItem
 			} else {
 				queryItems.append(dlQueryItem)
 			}
-			urlComponents.queryItems = queryItems
+			ipaURLComponents.queryItems = queryItems
 
-			// Set the modified URL back to the first asset
-			if let newURL = urlComponents.string {
-				firstAsset["url"] = newURL
-				assets[0] = firstAsset
-				firstItem["assets"] = assets
-				items[0] = firstItem
-				plist["items"] = items
-			} else {
+			guard let newIPAURL = ipaURLComponents.string else {
 				return nil
 			}
 
-			// Serialize the modified plist back to Data
-			let newData = try PropertyListSerialization.data(
-				fromPropertyList: plist,
-				format: .xml,
-				options: 0
-			)
+			ipaAsset.url = newIPAURL
+
+			// Rebuild updated manifest
+			var updatedIPAManifest = ipaManifest
+			ipaItem.assets[0] = ipaAsset
+			updatedIPAManifest.items[0] = ipaItem
+
+			let encoder = PropertyListEncoder()
+			encoder.outputFormat = .xml
+			let newData = try encoder.encode(updatedIPAManifest)
+
 			var newBuffer = ByteBufferAllocator().buffer(capacity: newData.count)
 			newBuffer.writeBytes(newData)
 			return newBuffer
 		} catch {
-			logger.error("Manifest plist modification failed: \(error.localizedDescription). \nRaw error: \(error)")
+			logger.error("Manifest plist modification failed: \(error.localizedDescription).")
 			return nil
 		}
 	}
