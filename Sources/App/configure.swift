@@ -9,7 +9,7 @@ public func configure(_ app: Application) async throws {
     // app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
 	app.middleware.use(CORSMiddleware.current, at: .beginning)
 
-	if let port = Int(Environment.get("PORT") ?? "2550") {
+	if let port = Int(Environment.get("PORT") ?? "8080") {
 		app.http.server.configuration.port = port
 	}
 
