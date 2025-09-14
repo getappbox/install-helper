@@ -3,6 +3,7 @@ name: Build and Push Docker Image
 on:
   push:
     branches: [ main ]
+    tags: [ '*' ]
   pull_request:
     branches: [ main ]
 
@@ -17,6 +18,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -31,10 +34,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Determine image tags
+        id: meta
+        run: |
+          REPO="ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            VERSION_TAG="${GITHUB_REF#refs/tags/}"
+            TAGS="$REPO:$VERSION_TAG\n$REPO:latest"
+          else
+            DATE_TAG="$(date -u +'%Y%m%d-%H%M%S')"
+            # Optional: also include short SHA for traceability
+            SHORT_SHA="${GITHUB_SHA::7}"
+            TAGS="$REPO:$DATE_TAG\n$REPO:$SHORT_SHA\n$REPO:latest"
+          fi
+          echo "tags<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$TAGS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
           platforms: linux/amd64
