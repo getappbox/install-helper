@@ -50,11 +50,7 @@ struct InstallController: RouteCollection {
 
 		// modify manifest body to update asset URL
 		guard let updatedBody = updatedManifestBody(from: body, logger: req.logger) else {
-			throw Abort(
-				.internalServerError,
-				headers: manifestResponse.headers,
-				reason: "Failed to update manifest.",
-				identifier: manifestURLString)
+			return manifestResponse
 		}
 
 		manifestResponse.body = updatedBody
@@ -123,7 +119,7 @@ struct InstallController: RouteCollection {
 			newBuffer.writeBytes(newData)
 			return newBuffer
 		} catch {
-			logger.error("Manifest plist modification failed: \(error.localizedDescription)")
+			logger.error("Manifest plist modification failed: \(error.localizedDescription). \nRaw error: \(error)")
 			return nil
 		}
 	}
