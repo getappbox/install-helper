@@ -67,10 +67,14 @@ struct InstallController: RouteCollection {
 
 		do {
 			var format = PropertyListSerialization.PropertyListFormat.xml
-			guard var plist = try PropertyListSerialization.propertyList(
+			guard var plistAny = try PropertyListSerialization.propertyList(
 				from: data,
-				options: .mutableContainersAndLeaves,
+				options: [],
 				format: &format) as? [String: Any] else {
+				return nil
+			}
+
+			guard var plist = plistAny as? [String: Any] else {
 				return nil
 			}
 
