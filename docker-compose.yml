@@ -20,10 +20,7 @@ x-shared_environment: &shared_environment
 services:
   app:
     image: install-helper:latest
-    build:
-      context: .
     environment:
       <<: *shared_environment
     ports:
-      - '2550:8080'
-    command: ["serve", "--env", "production", "--hostname", "0.0.0.0", "--port", "8080"]
+      - '2551:8080'
