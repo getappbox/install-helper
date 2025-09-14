@@ -6,6 +6,7 @@
 //
 
 import Vapor
+import SwiftSoup
 
 /// A controller to handle requests to the `/appinfo/scl/*` endpoint.
 ///
@@ -45,6 +46,26 @@ struct DBAppInfoController: RouteCollection {
 			throw Abort(.badRequest, reason: "Invalid URL.")
 		}
 
-		return try await req.client.get(.init(string: urlString))
+		let response = try await req.client.get(.init(string: urlString))
+		return try await processResponse(response)
+
+	}
+
+	func processResponse(_ response: ClientResponse) async throws -> ClientResponse {
+		guard
+			let body = response.body,
+			let htmlData = body.getData(at: 0, length: body.readableBytes),
+			let htmlString = String(data: htmlData, encoding: .utf8) else {
+			return response
+		}
+
+		if response.headers.contentType == .html {
+			let document = try SwiftSoup.parse(htmlString)
+			if try document.title().lowercased().contains("deleted") {
+				throw Abort(.notFound, reason: "App info not found.")
+			}
+		}
+
+		return response
 	}
 }
