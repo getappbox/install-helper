@@ -67,25 +67,23 @@ struct InstallController: RouteCollection {
 
 		do {
 			var format = PropertyListSerialization.PropertyListFormat.xml
-			guard var plistAny = try PropertyListSerialization.propertyList(
-				from: data,
-				options: [],
-				format: &format) as? [String: Any] else {
-				return nil
-			}
-
+			let plistAny = try PropertyListSerialization.propertyList(from: data, options: [], format: &format)
 			guard var plist = plistAny as? [String: Any] else {
 				return nil
 			}
 
-			guard var items = plist["items"] as? [[String: Any]],
-				  !items.isEmpty,
-				  var firstItem = items[0] as? [String: Any],
-				  var assets = firstItem["assets"] as? [[String: Any]],
-				  !assets.isEmpty,
-				  var firstAsset = assets[0] as? [String: Any],
-				  let urlString = firstAsset["url"] as? String,
-				  var urlComponents = URLComponents(string: urlString) else {
+			// Navigate to the first asset URL
+			guard var items = plist["items"] as? [[String: Any]], !items.isEmpty else {
+				return nil
+			}
+
+			var firstItem = items[0]
+			guard var assets = firstItem["assets"] as? [[String: Any]], !assets.isEmpty else {
+				return nil
+			}
+
+			var firstAsset = assets[0]
+			guard let urlString = firstAsset["url"] as? String, var urlComponents = URLComponents(string: urlString) else {
 				return nil
 			}
 
@@ -104,6 +102,7 @@ struct InstallController: RouteCollection {
 			}
 			urlComponents.queryItems = queryItems
 
+			// Set the modified URL back to the first asset
 			if let newURL = urlComponents.string {
 				firstAsset["url"] = newURL
 				assets[0] = firstAsset
@@ -114,6 +113,7 @@ struct InstallController: RouteCollection {
 				return nil
 			}
 
+			// Serialize the modified plist back to Data
 			let newData = try PropertyListSerialization.data(
 				fromPropertyList: plist,
 				format: .xml,
