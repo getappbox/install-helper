@@ -48,7 +48,6 @@ struct DBAppInfoController: RouteCollection {
 
 		let response = try await req.client.get(.init(string: urlString))
 		return try await processResponse(response)
-
 	}
 
 	func processResponse(_ response: ClientResponse) async throws -> ClientResponse {
@@ -61,8 +60,11 @@ struct DBAppInfoController: RouteCollection {
 
 		if response.headers.contentType == .html {
 			let document = try SwiftSoup.parse(htmlString)
-			if try document.title().lowercased().contains("deleted") {
-				throw Abort(.notFound, reason: "App info not found.")
+			let title = try document.title().lowercased()
+			if title.contains("deleted") {
+				throw Abort(.notFound, reason: "App info not found on Dropbox.")
+			} else if title.contains("link temporarily disabled") {
+				throw Abort(.locked, reason: "Share link is temporarily disabled by Dropbox.")
 			}
 		}
 
