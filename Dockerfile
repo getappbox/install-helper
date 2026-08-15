@@ -69,8 +69,18 @@ COPY --from=build --chown=vapor:vapor /staging /app
 # Ensure all further commands run as the vapor user
 USER vapor:vapor
 
+# glibc creates up to 8 malloc arenas per core; multi-threaded SwiftNIO workloads fragment
+# across them and RSS creeps upward for weeks even though the live heap stays small. Two
+# arenas keeps resident memory close to actual usage (standard swift-server guidance).
+ENV MALLOC_ARENA_MAX=2
+
 # Let Docker bind to port 8080
 EXPOSE 8080
+
+# Liveness probe: healthy only while the server accepts TCP connections on 8080.
+# Uses bash's /dev/tcp so no extra packages (curl/wget) are added to the runtime image.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' || exit 1
 
 # Start the Vapor service when the image is run, default to listening on 8080 in production environment
 ENTRYPOINT ["./App"]

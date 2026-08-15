@@ -15,6 +15,12 @@ StandardOutput=syslog
 StandardError=syslog
 SyslogIdentifier=install-helper-vapor
 Environment="PORT=2550"
+# Cap glibc malloc arenas — without this, multi-threaded NIO workloads fragment across
+# per-core arenas and RSS creeps upward for weeks (30-40MB at boot -> 300-400MB+).
+Environment="MALLOC_ARENA_MAX=2"
+# Secrets (APPBOX_CLIENT_TOKEN, MAILGUN_API_KEY, YOURLS_SIGNATURE_SECRET, …) live in a
+# gitignored .env file, not in this unit. Leading `-` = don't fail if the file is absent.
+EnvironmentFile=-/home/vapor/install-helper/.env
 
 [Install]
 WantedBy=multi-user.target

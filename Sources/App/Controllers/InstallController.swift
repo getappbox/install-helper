@@ -31,6 +31,8 @@ struct InstallController: RouteCollection {
 				path.append("/\(pathComponent)")
 			}
 		}
+		try DropboxPathValidation.validate(path)
+
 		var manifestURLComponents = URLComponents()
 		manifestURLComponents.scheme = "https"
 		manifestURLComponents.host = "www.dropbox.com"
@@ -41,14 +43,12 @@ struct InstallController: RouteCollection {
 			throw Abort(.badRequest, reason: "Invalid URL.")
 		}
 
-		var manifestResponse = try await req.client.get(.init(stringLiteral: manifestURLString))
+		var manifestResponse = try await req.proxyGet(manifestURLString)
 
-		// ensure we got a valid response with body
 		guard manifestResponse.status == .ok, let body = manifestResponse.body else {
 			return manifestResponse
 		}
 
-		// modify manifest body to update asset URL
 		guard let updatedBody = updatedManifestBody(from: body, logger: req.logger) else {
 			return manifestResponse
 		}
@@ -95,7 +95,6 @@ struct InstallController: RouteCollection {
 
 			ipaAsset.url = newIPAURL
 
-			// Rebuild updated manifest
 			var updatedIPAManifest = ipaManifest
 			ipaItem.assets[0] = ipaAsset
 			updatedIPAManifest.items[0] = ipaItem

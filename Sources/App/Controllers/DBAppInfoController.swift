@@ -9,10 +9,6 @@ import Vapor
 import SwiftSoup
 
 /// A controller to handle requests to the `/appinfo/scl/*` endpoint.
-///
-/// This controller processes requests to the `/appinfo/scl/*` endpoint,
-/// modifies the URL to ensure direct download from Dropbox, and forwards
-/// the request to Dropbox. (https://www.dropbox.com/scl/...)
 struct DBAppInfoController: RouteCollection {
 	func boot(routes: Vapor.RoutesBuilder) throws {
 		let install = routes.grouped("appinfo", "scl")
@@ -28,7 +24,6 @@ struct DBAppInfoController: RouteCollection {
 			return URLQueryItem(name: String(keyValue[0]), value: String(keyValue[1]))
 		} ?? []
 
-		// ensure dl=1 is present to force direct download from Dropbox
 		let dlQueryItem = URLQueryItem(name: "dl", value: "1")
 		if let dlQueryItemIndex = queryItems.firstIndex(where: { $0.name == dlQueryItem.name }) {
 			queryItems[dlQueryItemIndex] = dlQueryItem
@@ -36,17 +31,20 @@ struct DBAppInfoController: RouteCollection {
 			queryItems.append(dlQueryItem)
 		}
 
+		let path = req.url.path.replacingOccurrences(of: "/appinfo/", with: "/")
+		try DropboxPathValidation.validate(path)
+
 		var components = URLComponents()
 		components.scheme = "https"
 		components.host = "www.dropbox.com"
-		components.path = req.url.path.replacingOccurrences(of: "/appinfo/", with: "/")
+		components.path = path
 		components.queryItems = queryItems
 
 		guard let urlString = components.string else {
 			throw Abort(.badRequest, reason: "Invalid URL.")
 		}
 
-		let response = try await req.client.get(.init(string: urlString))
+		let response = try await req.proxyGet(urlString)
 		return try await processResponse(response)
 	}
 

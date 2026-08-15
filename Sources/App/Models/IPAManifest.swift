@@ -1,6 +1,5 @@
 //
 //  IPAManifest.swift
-//  install-helper
 //
 //  Created by Vineet Choudhary on 14/09/25.
 //

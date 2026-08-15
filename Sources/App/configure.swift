@@ -1,18 +1,22 @@
 import Vapor
 
-// configures your application
 public func configure(_ app: Application) async throws {
-    // Load variables from .env files before anything else so Environment.get works locally
     DotEnvLoader.load(into: app)
 
-    // uncomment to serve files from /Public folder
-    // app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
 	app.middleware.use(CORSMiddleware.current, at: .beginning)
 
 	if let port = Int(Environment.get("PORT") ?? "8080") {
 		app.http.server.configuration.port = port
 	}
 
-    // register routes
+	app.caches.use(.memory)
+
+	app.http.client.configuration.timeout = .init(connect: .seconds(10), read: .seconds(30))
+
+	let missingConfig = Environment.missingAPIConfiguration()
+	if !missingConfig.isEmpty {
+		app.logger.warning("AppBox /api/v1 secrets missing (those endpoints will error until set): \(missingConfig.joined(separator: ", "))")
+	}
+
     try routes(app)
 }

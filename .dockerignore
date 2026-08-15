@@ -1,2 +1,25 @@
+# Build artifacts
 .build/
 .swiftpm/
+
+# Secrets — never let a local .env enter the build context or an image layer.
+.env
+.env.*
+!.env.example
+
+# Version control & editor/tooling
+.git
+.gitignore
+.github
+.vscode
+.dockerignore
+
+# Not needed to build or run the service.
+# NB: keep Tests/ — Package.swift declares the AppTests target, and `swift build`
+# validates every declared target's source dir exists even in a release build.
+docs
+*.md
+.DS_Store
+db.sqlite
+docker-compose.yml
+installhelper.service

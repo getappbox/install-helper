@@ -10,6 +10,8 @@ let package = Package(
         // 💧 A server-side Swift web framework.
         .package(url: "https://github.com/vapor/vapor.git", .upToNextMajor(from: "4.76.0")),
 		.package(url: "https://github.com/scinfu/SwiftSoup.git", .upToNextMajor(from: "2.11.0")),
+		// Already Vapor's own HTTP client; declared directly for the size-capped proxy fetch.
+		.package(url: "https://github.com/swift-server/async-http-client.git", .upToNextMajor(from: "1.19.0")),
     ],
     targets: [
         .executableTarget(
@@ -17,6 +19,7 @@ let package = Package(
             dependencies: [
                 .product(name: "Vapor", package: "vapor"),
 				.product(name: "SwiftSoup", package: "SwiftSoup"),
+				.product(name: "AsyncHTTPClient", package: "async-http-client"),
             ],
             swiftSettings: [
                 // Enable better optimizations when building in Release configuration. Despite the use of

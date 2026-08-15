@@ -8,10 +8,6 @@
 import Vapor
 
 /// A controller to handle requests to the `/appinfo/s/*` endpoint.
-///
-/// This controller processes requests to the `/appinfo/s/*` endpoint,
-/// modifies the URL to ensure direct download from Dropbox, and forwards
-/// the request to Dropbox. (https://dl.dropboxusercontent.com/s/...)
 struct DBUCAppInfoController: RouteCollection {
 	let ignoreQueryParams = ["$web_only", "_branch_match_id", "_branch_referrer"]
 
@@ -35,7 +31,6 @@ struct DBUCAppInfoController: RouteCollection {
 			path = path.replacingOccurrences(of: "?", with: "").replacingOccurrences(of: "&", with: "")
 		}
 
-		// ensure dl=1 is present to force direct download from Dropbox
 		let dlQueryItem = URLQueryItem(name: "dl", value: "1")
 		if let dlQueryItemIndex = queryItems.firstIndex(where: { $0.name == dlQueryItem.name }) {
 			queryItems[dlQueryItemIndex] = dlQueryItem
@@ -43,17 +38,20 @@ struct DBUCAppInfoController: RouteCollection {
 			queryItems.append(dlQueryItem)
 		}
 
+		let dropboxPath = path.replacingOccurrences(of: "/appinfo/", with: "/")
+		try DropboxPathValidation.validate(dropboxPath)
+
 		var components = URLComponents()
 		components.scheme = "https"
 		components.host = "www.dropbox.com"
-		components.path = path.replacingOccurrences(of: "/appinfo/", with: "/")
+		components.path = dropboxPath
 		components.queryItems = queryItems
 
 		guard let urlString = components.string else {
 			throw Abort(.badRequest, reason: "Invalid URL.")
 		}
 
-		return try await req.client.get(.init(string: urlString))
+		return try await req.proxyGet(urlString)
 	}
 
 	private func getQueryParam(from keyValue: [Substring.SubSequence]) -> URLQueryItem? {

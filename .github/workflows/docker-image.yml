@@ -7,6 +7,12 @@ on:
   pull_request:
     branches: [ main ]
 
+# A newer push on the same ref cancels an in-flight build (saves CI minutes).
+# Tags each get their own group, so release builds are never cancelled by each other.
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-push:
     runs-on: ubuntu-22.04
@@ -18,11 +24,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -52,9 +53,20 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           platforms: linux/amd64
+          # Single-arch build → skip the provenance attestation that otherwise
+          # shows up as an "unknown/unknown" entry in the GHCR package listing.
+          provenance: false
+          # Link the published package back to this repo/commit.
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          # Persist the Swift build layers between runs. The release build uses
+          # -cross-module-optimization and is slow from scratch; this caches it.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
