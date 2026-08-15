@@ -1,90 +1,189 @@
-## AppBox Install Helper
+# AppBox Install Helper
 
-The AppBox backend. One Vapor service, two roles / hostnames:
+The AppBox backend
 
-- **`install.getappbox.com`** — the original install proxies: direct access to Dropbox-hosted files without CORS headers (`/cors`), OTA manifest rewriting (`/install/**`), and appinfo proxies (`/appinfo/scl/**`, `/appinfo/s/**`).
-- **`api.getappbox.com`** — the AppBox client API under `/api/v1/*` (config / update check / short links / build emails / notifications). Both hostnames point at the same service; routes are host-agnostic.
+| Hostname | Role | Routes |
+|---|---|---|
+| `api.getappbox.com` | AppBox client API | `/api/v1/*` |
+| `install.getappbox.com` | Install / proxy layer | `/cors`, `/install/**`, `/appinfo/**` |
 
-## Client API (`/api/v1`)
+**Contents** — [Quick start](#quick-start) · [Configuration](#configuration) ·
+[API reference](#api-reference) · [Deployment](#deployment) · [Operations](#operations)
 
-**Full API reference (all routes, requests/responses, status codes, config): [docs/API.md](docs/API.md).** The summary below is a quick index.
+---
 
-All endpoints require the static client token header `X-AppBox-Client-Token` (env `APPBOX_CLIENT_TOKEN`). `shorten`, `mail/send`, and `notify` additionally require the caller's Dropbox access token as `Authorization: Bearer <token>` — the server verifies it against Dropbox (`users/get_current_account`, cached by token digest for `DROPBOX_TOKEN_CACHE_TTL_SECONDS`), so only real, logged-in AppBox users can send mail, mint short links, or fire notifications.
+## Quick start
 
-Errors use `{"error":{"code":"snake_case","message":"…"}}`. Per-IP rate limits: config 120/min, latest-version 120/min, shorten 60/min, mail 20/min, notify 60/min, legacy routes 300/min (in-memory, single instance).
+Every method needs a `.env` file first:
 
-| Endpoint | Auth | Body | Success |
-|---|---|---|---|
-| `GET /api/v1/config` | client token | — | `{"dropboxAppKey":"…"}` |
-| `GET /api/v1/latest-version` | client token | — | `{"version","downloadURL","homebrewVersion"}` |
-| `POST /api/v1/shorten` | + Dropbox bearer | `{"url","name","version","build","identifier"}` | `{"shortURL":"https://appbox.me/…"}` |
-| `POST /api/v1/mail/send` | + Dropbox bearer | `{"name","version","build","to":[…],"installURL","personalMessage?"}` | `{"id":"<mailgun id>"}` |
-| `POST /api/v1/notify` | + Dropbox bearer | `{"service":"slack"|"teams","webhookURL","text"}` | `200` |
-
-Notes:
-- `shorten` proxies the appbox.me YOURLS instance and treats a YOURLS **400 that carries `shorturl`** as success — that's how keep-same-link re-uploads keep their stable short URL. A hard failure is `502 shortener_unavailable`; falling back to the long URL is the client's job.
-- `mail/send` holds the HTML template server-side; `personalMessage` arrives already rendered (the `{BUILD_*}` placeholder substitution stays client-side).
-- `latest-version` merges the GitHub release + Homebrew cask APIs and caches the result (`UPDATE_CACHE_TTL_SECONDS`), so every client's update check doesn't hit GitHub directly (rate limits). The client keeps the version comparison + Homebrew-install detection.
-- `notify` owns the Slack/Teams webhook JSON envelope (so it can evolve without an app release); the client sends the already-rendered `text`. The webhook host must be on `NOTIFY_ALLOWED_HOSTS` so the endpoint can't be used as an open relay.
-- Dropbox verification outage → `503 verification_unavailable` (fail closed, uncached).
-
-## Configuration
-
-Copy `.env.example` to `.env` and fill in the values (client token, Dropbox app key, Mailgun key/domain, YOURLS secret). A missing `/api/v1` secret is logged at boot but is **not** fatal — the install/appinfo/cors routes keep serving and only the affected `/api/v1` endpoint errors per request. When deploying with docker-compose/systemd, pass the same variables through the environment.
-
-### Memory bounds
-
-Long-running RSS growth (30-40MB at boot creeping to 300-400MB+ over weeks, as seen on pre-1.0.2 deployments) is addressed by four bounds: the `/cors` host allowlist (bounds the HTTP client's per-host connection pools, which are never evicted while the process runs), a `PROXY_MAX_BODY_BYTES` cap on proxied upstream bodies (default 4 MiB; previously up to 4 GiB per request could be buffered), a bounded self-sweeping cache for Dropbox token verdicts (Vapor's memory cache never sweeps expired-but-unread keys), and `MALLOC_ARENA_MAX=2` set in both the Docker image and `installhelper.service` (glibc arena fragmentation otherwise ratchets RSS on multi-core Linux). If you run the binary outside those two paths, export `MALLOC_ARENA_MAX=2` yourself.
-
-## Install Steps
-
-Follow these instruction https://docs.vapor.codes/deploy/digital-ocean/#initial-setup
-
-### Clone (for new install only)
-```sh
-git clone https://github.com/getappbox/install-helper.git
+```bash
+cp .env.example .env
 ```
 
-### Change directory
-```sh
-cd install-helper
+Fill in the values (see [Configuration](#configuration)).
+
+### Option 1 — Docker Compose
+
+```bash
+docker compose build
 ```
 
-### Run
-```sh
-swift run App serve --env production
+```bash
+docker compose up -d app
 ```
 
-### Create service file
-```
-/etc/systemd/system/installhelper.service
+```bash
+curl http://localhost:2551/
 ```
 
-### DNS / hostnames
-Point both `install.getappbox.com` and `api.getappbox.com` (A records) at the box; the reverse proxy forwards both vhosts to this service's port and must pass the real client IP as `X-Forwarded-For` (the rate limiter keys on it). Set `TRUSTED_PROXY_COUNT` to the number of proxies in front of the service (default `1`) — the limiter counts that many hops in from the right of the header, since proxies append and everything further left is client-supplied. If the service is reachable directly, set it to `0`.
+### Option 2 — Docker run
 
-## Update Steps
-### Change user (do not run as root user)
-```sh
+```bash
+docker pull ghcr.io/getappbox/install-helper:latest
+```
+
+```bash
+docker run -d --name install-helper --env-file .env -p 8080:8080 --restart unless-stopped ghcr.io/getappbox/install-helper:latest
+```
+
+Pin a specific version in production rather than tracking `latest`:
+
+```bash
+docker run -d --name install-helper --env-file .env -p 8080:8080 --restart unless-stopped ghcr.io/getappbox/install-helper:1.0.2
+```
+
+### Option 3 — Build the image directly
+
+```bash
+docker build -t install-helper:latest .
+```
+
+```bash
+docker run -d --name install-helper --env-file .env -p 8080:8080 install-helper:latest
+```
+
+The image is a two-stage build (Swift 6.1.3 builder → `ubuntu:jammy` runtime, statically linked stdlib), runs as the non-root `vapor` user, sets `MALLOC_ARENA_MAX=2`, and ships a `HEALTHCHECK` that probes TCP `8080`:
+
+```bash
+docker inspect --format '{{.State.Health.Status}}' install-helper
+```
+
+### systemd (native install)
+
+Install the unit file at `/etc/systemd/system/installhelper.service` (`installhelper.service`
+in this repo). It loads secrets from the `.env` and sets `MALLOC_ARENA_MAX=2`.
+
+```bash
+sudo systemctl daemon-reload && sudo systemctl enable --now installhelper
+```
+
+### Updating
+
+**Docker Compose** (builds locally, so rebuild rather than pull):
+
+```bash
+git pull && docker compose build && docker compose up -d app
+```
+
+**Prebuilt GHCR image:**
+
+```bash
+docker pull ghcr.io/getappbox/install-helper:latest && docker compose up -d app
+```
+
+**Native** — do not run as root:
+
+```bash
 sudo su vapor
 ```
 
-### Change directory
-```sh
-cd install-helper
+```bash
+cd install-helper && git fetch && git pull
 ```
 
-### Fetch latest changes
-```sh
-git fetch && git pull
-```
-
-### Build release app
-```sh
+```bash
 swift build -c release
 ```
 
-### Restart service
-```sh
+```bash
 sudo service installhelper restart
 ```
+
+---
+
+## Configuration
+
+All configuration is environment variables, loaded from `.env` in development and passed
+through the environment by Compose/systemd in production. `.env.example` is the annotated
+reference; the essentials:
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `PORT` | HTTP listen port | `8080` (fallback) |
+| `APPBOX_CLIENT_TOKEN` | Shared secret for `X-AppBox-Client-Token` | — (required) |
+| `DROPBOX_APP_KEY` | Public OAuth client_id served by `/api/v1/config` | — |
+| `DROPBOX_TOKEN_CACHE_TTL_SECONDS` | How long a verified Dropbox token stays cached | `600` |
+| `MAILGUN_API_KEY` / `MAILGUN_DOMAIN` / `MAILGUN_FROM` | Build-email delivery | — |
+| `YOURLS_API_URL` / `YOURLS_SIGNATURE_SECRET` | Short-link backend | — |
+| `SHORTLINK_TARGET_BASE` | Installer page the short link points at | — |
+| `CORS_PROXY_ALLOWED_HOSTS` | Host suffixes `/cors?url=` may proxy to | `dropbox.com,dropboxusercontent.com,getappbox.com` |
+| `PROXY_MAX_BODY_BYTES` | Max bytes buffered from one proxied response | `4194304` (4 MiB) |
+| `GITHUB_LATEST_RELEASE_URL` / `HOMEBREW_CASK_URL` | Update-check upstreams | — |
+| `UPDATE_CACHE_TTL_SECONDS` | Update-check cache lifetime | `3600` |
+| `NOTIFY_ALLOWED_HOSTS` | Host suffixes `/api/v1/notify` may POST to | Slack + Teams hosts |
+| `TRUSTED_PROXY_COUNT` | Reverse proxies appending to `X-Forwarded-For` | `1` |
+
+A missing `/api/v1` secret is logged at boot but is **not** fatal — the install/appinfo/cors
+routes keep serving, and only the affected `/api/v1` endpoint errors (`500 misconfigured`)
+per request.
+
+---
+
+## API reference
+
+### Conventions
+
+**Authentication.** Every `/api/v1` route requires the static client token header. Other endpoints additionally require the caller's Dropbox access token as `Authorization: Bearer <token>`, server verifies it against Dropbox and caches the verdict by token digest for `DROPBOX_TOKEN_CACHE_TTL_SECONDS`. Only real, logged-in AppBox users can use the short links, send mail, or fire notifications.
+
+**Errors.** All `/api/v1` failures return the same envelope:
+
+```json
+{ "error": { "code": "snake_case_code", "message": "Human readable detail." } }
+```
+
+| Code | Status | Meaning |
+|---|---|---|
+| `invalid_client_token` | 401 | Missing/incorrect `X-AppBox-Client-Token` |
+| `missing_dropbox_token` / `invalid_dropbox_token` | 401 | Bearer token absent or rejected by Dropbox |
+| `invalid_body` | 400 | Body did not decode into the expected shape |
+| `invalid_recipients` | 400 | Not 1–100 valid email addresses |
+| `invalid_service` | 400 | `service` was not `slack` or `teams` |
+| `invalid_url` | 400 | Malformed URL in the request body |
+| `webhook_not_allowed` | 403 | Webhook host not on `NOTIFY_ALLOWED_HOSTS` |
+| `rate_limited` | 429 | Bucket exhausted; see `Retry-After` |
+| `misconfigured` | 500 | A required env var is unset |
+| `verification_unavailable` | 503 | Dropbox verification outage (fails closed, uncached) |
+| `shortener_unavailable` / `mail_provider_error` / `notify_failed` / `update_check_unavailable` | 502 | Upstream provider failed |
+
+**Rate limits.** Fixed window, per client IP, in-memory (single instance). Exceeding a bucket returns `429` with a `Retry-After` header.
+
+| Bucket | Limit |
+|---|---|
+| `/api/v1/config` | 120 / min |
+| `/api/v1/latest-version` | 120 / min |
+| `/api/v1/shorten` | 60 / min |
+| `/api/v1/mail/send` | 20 / min |
+| `/api/v1/notify` | 60 / min |
+| Install / appinfo / cors routes | 300 / min |
+
+---
+
+## Operations
+
+### Memory bounds
+
+1. **`/cors` host allowlist** — bounds the HTTP client's per-host connection pools
+2. **`PROXY_MAX_BODY_BYTES`** — caps proxied upstream bodies (default 4 MiB).
+3. **Self-sweeping token cache** — Vapor's memory cache never sweeps expired-but-unread keys,
+   so Dropbox token verdicts use a bounded cache that does.
+4. **`MALLOC_ARENA_MAX=2`** — set in both the Docker image and `installhelper.service`; glibc arena fragmentation otherwise ratchets RSS on multi-core Linux. If you run the binary outside those two paths, export `MALLOC_ARENA_MAX=2` yourself.
