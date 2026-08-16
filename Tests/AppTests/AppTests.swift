@@ -470,18 +470,45 @@ final class AppTests: XCTestCase {
 			"2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f")
 	}
 
-	func testMailgunHTMLBody_matchesLegacyTemplate() {
+	func testMailgunHTMLBody_carriesBuildDetailsAndInstallLink() {
 		let base = MailSendRequest(name: "MyApp", version: "2.0", build: "42", to: ["a@b.com"],
 								   installURL: "https://appbox.me/x1", personalMessage: nil)
-		let plain = MailgunService.htmlBody(for: base)
-		XCTAssertTrue(plain.contains("<h1>MyApp 2.0 (42) for iOS is ready to test.</h1>"))
-		XCTAssertTrue(plain.contains("<h2><a href=\"https://appbox.me/x1\">https://appbox.me/x1</a></h2>"))
-		XCTAssertFalse(plain.contains("Message from Developer"))
+		let plain = BuildEmailTemplate.html(for: base)
+		XCTAssertTrue(plain.contains("MyApp 2.0 (42) is ready to test"))
+		XCTAssertTrue(plain.contains("href=\"https://appbox.me/x1\""))
+		XCTAssertTrue(plain.contains("Install MyApp"))
+		XCTAssertFalse(plain.contains("Message from the developer"))
+
+		let withMessage = MailSendRequest(name: "MyApp", version: "2.0", build: "42", to: ["a@b.com"],
+										  installURL: "https://appbox.me/x1", personalMessage: "Hello QA\nSecond line")
+		let personal = BuildEmailTemplate.html(for: withMessage)
+		XCTAssertTrue(personal.contains("Message from the developer"))
+		XCTAssertTrue(personal.contains("Hello QA<br />Second line"))
+	}
+
+	func testMailgunHTMLBody_escapesUserSuppliedValues() {
+		let hostile = MailSendRequest(name: "<script>alert(1)</script>", version: "1.0 & 2.0", build: "\"42\"",
+									  to: ["a@b.com"], installURL: "https://appbox.me/x?a=1&b=2",
+									  personalMessage: "<b>bold</b>")
+		let html = BuildEmailTemplate.html(for: hostile)
+		XCTAssertFalse(html.contains("<script>"))
+		XCTAssertTrue(html.contains("&lt;script&gt;"))
+		XCTAssertTrue(html.contains("1.0 &amp; 2.0"))
+		XCTAssertTrue(html.contains("https://appbox.me/x?a=1&amp;b=2"))
+		XCTAssertTrue(html.contains("&lt;b&gt;bold&lt;/b&gt;"))
+	}
+
+	func testMailgunTextBody_includesLinkAndDeveloperMessage() {
+		let base = MailSendRequest(name: "MyApp", version: "2.0", build: "42", to: ["a@b.com"],
+								   installURL: "https://appbox.me/x1", personalMessage: nil)
+		let plain = BuildEmailTemplate.text(for: base)
+		XCTAssertTrue(plain.contains("MyApp 2.0 (42) is ready to test"))
+		XCTAssertTrue(plain.contains("https://appbox.me/x1"))
+		XCTAssertFalse(plain.contains("Message from the developer"))
 
 		let withMessage = MailSendRequest(name: "MyApp", version: "2.0", build: "42", to: ["a@b.com"],
 										  installURL: "https://appbox.me/x1", personalMessage: "Hello QA")
-		let personal = MailgunService.htmlBody(for: withMessage)
-		XCTAssertTrue(personal.contains("<hr /> <p>Message from Developer : <br /> Hello QA</p> <hr />"))
+		XCTAssertTrue(BuildEmailTemplate.text(for: withMessage).contains("Message from the developer:\nHello QA"))
 	}
 
 	// MARK: - Rate limiting
