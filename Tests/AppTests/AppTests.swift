@@ -72,6 +72,136 @@ final class AppTests: XCTestCase {
 		XCTAssertThrowsError(try DropboxPathValidation.validate("/scl/" + String(repeating: "a", count: 1025)))
 	}
 
+	// MARK: - Dropbox notice pages
+
+	private func htmlResponse(title: String) -> ClientResponse {
+		let html = "<html><head><title>\(title)</title></head><body>Nope.</body></html>"
+		var buffer = ByteBufferAllocator().buffer(capacity: html.utf8.count)
+		buffer.writeString(html)
+		var headers = HTTPHeaders()
+		headers.contentType = .html
+		return ClientResponse(status: .ok, headers: headers, body: buffer)
+	}
+
+	/// Dropbox answers a deleted or suspended share link with 200 + one of its notice pages
+	func testDropboxResponseValidation_mapsNoticePagesToStatuses() throws {
+		let deleted = htmlResponse(title: "Dropbox - File Deleted - Simplify your life")
+		XCTAssertThrowsError(try DropboxResponseValidation.validate(deleted, describing: "App info")) { error in
+			XCTAssertEqual((error as? Abort)?.status, .notFound)
+			XCTAssertEqual((error as? Abort)?.reason, "App info not found on Dropbox.")
+		}
+		XCTAssertThrowsError(try DropboxResponseValidation.validate(deleted, describing: "Install manifest")) { error in
+			XCTAssertEqual((error as? Abort)?.reason, "Install manifest not found on Dropbox.")
+		}
+
+		let invalid = htmlResponse(title: "Dropbox - Invalid Link - Simplify your life")
+		XCTAssertThrowsError(try DropboxResponseValidation.validate(invalid, describing: "App info")) { error in
+			XCTAssertEqual((error as? Abort)?.status, .notFound)
+		}
+
+		let disabled = htmlResponse(title: "Dropbox - Link temporarily disabled")
+		XCTAssertThrowsError(try DropboxResponseValidation.validate(disabled, describing: "App info")) { error in
+			XCTAssertEqual((error as? Abort)?.status, .locked)
+		}
+	}
+
+	/// An unrecognised page is reported to the caller, not thrown, only the routes that need a file
+	/// (never HTML) turn it into an error.
+	func testDropboxResponseValidation_reportsUnknownHTMLAndIgnoresNonHTML() throws {
+		let unknown = htmlResponse(title: "Dropbox - Verify it's you")
+		XCTAssertEqual(try DropboxResponseValidation.validate(unknown, describing: "App info"),
+					   "dropbox - verify it's you")
+
+		var buffer = ByteBufferAllocator().buffer(capacity: 16)
+		buffer.writeString("{\"name\":\"MyApp\"}")
+		var headers = HTTPHeaders()
+		headers.contentType = .json
+		let json = ClientResponse(status: .ok, headers: headers, body: buffer)
+		XCTAssertNil(try DropboxResponseValidation.validate(json, describing: "App info"),
+					 "a real file must pass straight through")
+
+		XCTAssertNil(try DropboxResponseValidation.validate(ClientResponse(status: .ok), describing: "App info"))
+	}
+
+	// MARK: - Proxied response headers
+
+	/// Dropbox answers a share link with ~4 KB of headers, which overflows nginx's default 4 KB
+	/// `proxy_buffer_size` and turns the whole reply into a 502 before the client ever sees it.
+	func testProxyResponseHeaders_dropsUpstreamHeadersOutsideTheAllowlist() {
+		var upstream = HTTPHeaders()
+		upstream.add(name: "content-type", value: "text/html; charset=utf-8")
+		upstream.add(name: "Content-Security-Policy", value: String(repeating: "a", count: 2670))
+		upstream.add(name: "set-cookie", value: "t=abc; Domain=dropbox.com")
+		upstream.add(name: "set-cookie", value: "locale=en; Domain=dropbox.com")
+		upstream.add(name: "x-dropbox-request-id", value: "90db41e7")
+		upstream.add(name: "strict-transport-security", value: "max-age=31536000")
+		upstream.add(name: "content-length", value: "999999")
+
+		let filtered = ProxyResponseHeaders.filtered(upstream, bodyByteCount: 42)
+
+		XCTAssertEqual(filtered.contentType, .html)
+		XCTAssertTrue(filtered["set-cookie"].isEmpty, "Dropbox's cookies are not ours to set on a caller")
+		XCTAssertTrue(filtered["content-security-policy"].isEmpty)
+		XCTAssertTrue(filtered["x-dropbox-request-id"].isEmpty)
+		XCTAssertTrue(filtered["strict-transport-security"].isEmpty)
+		XCTAssertEqual(filtered.first(name: .contentLength), "42", "length must describe the body we hold")
+
+		let totalBytes = filtered.reduce(0) { $0 + $1.name.count + $1.value.count + 4 }
+		XCTAssertLessThan(totalBytes, 1024, "a proxied reply must stay far inside a 4 KB header buffer")
+	}
+
+	func testProxyResponseHeaders_keepsTheHeadersThatDescribeTheBody() {
+		var upstream = HTTPHeaders()
+		upstream.add(name: "content-type", value: "application/json")
+		upstream.add(name: "content-disposition", value: "attachment; filename=\"appinfo.json\"")
+		upstream.add(name: "cache-control", value: "no-cache, no-store")
+		upstream.add(name: "content-encoding", value: "gzip")
+
+		let filtered = ProxyResponseHeaders.filtered(upstream, bodyByteCount: 128)
+
+		XCTAssertEqual(filtered.contentType, .json)
+		XCTAssertEqual(filtered.first(name: .contentDisposition), "attachment; filename=\"appinfo.json\"")
+		XCTAssertEqual(filtered.first(name: .cacheControl), "no-cache, no-store")
+		XCTAssertEqual(filtered.first(name: .contentEncoding), "gzip", "the body is forwarded byte-for-byte")
+		XCTAssertEqual(filtered.first(name: .contentLength), "128")
+	}
+
+	/// The allowlist matches whole names, case-insensitively. `x-content-type-options` is a real Dropbox
+	/// header and must not ride along just because an allowed name is a substring of it.
+	func testProxyResponseHeaders_matchWholeHeaderNamesCaseInsensitively() {
+		var upstream = HTTPHeaders()
+		upstream.add(name: "Content-Type", value: "application/xml")
+		upstream.add(name: "CACHE-CONTROL", value: "no-store")
+		upstream.add(name: "x-content-type-options", value: "nosniff")
+		upstream.add(name: "content-type-options", value: "nosniff")
+
+		let filtered = ProxyResponseHeaders.filtered(upstream, bodyByteCount: 7)
+
+		XCTAssertEqual(filtered.first(name: .contentType), "application/xml", "header names are case-insensitive")
+		XCTAssertEqual(filtered.first(name: .cacheControl), "no-store")
+		XCTAssertTrue(filtered["x-content-type-options"].isEmpty, "containing an allowed name is not being one")
+		XCTAssertTrue(filtered["content-type-options"].isEmpty)
+	}
+
+	/// A stale or duplicated `Content-Length` is how a proxied reply ends up truncated, hung, or rejected
+	/// downstream, so the upstream one is always dropped and restated from the body in hand.
+	func testProxyResponseHeaders_stateExactlyOneContentLengthForTheBodyHeld() {
+		var upstream = HTTPHeaders()
+		upstream.add(name: "content-length", value: "999999")
+		upstream.add(name: "Content-Length", value: "111111")
+		upstream.add(name: "cache-control", value: "no-cache")
+		upstream.add(name: "cache-control", value: "no-store")
+
+		let filtered = ProxyResponseHeaders.filtered(upstream, bodyByteCount: 0)
+
+		XCTAssertEqual(filtered["content-length"], ["0"], "an empty body still gets exactly one honest length")
+		XCTAssertEqual(filtered["cache-control"], ["no-cache", "no-store"], "a repeated allowed header is kept intact")
+
+		let noUpstreamHeaders = ProxyResponseHeaders.filtered(HTTPHeaders(), bodyByteCount: 12)
+		XCTAssertEqual(noUpstreamHeaders["content-length"], ["12"])
+		XCTAssertEqual(noUpstreamHeaders.count, 1, "nothing is invented for a response that carried no headers")
+	}
+
 	func testInstallRoute_rejectsNonShareLinkPaths() async throws {
 		let app = try await makeApp()
 		defer { app.shutdown() }

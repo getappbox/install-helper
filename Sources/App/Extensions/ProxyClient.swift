@@ -25,9 +25,26 @@ extension Request {
 				.execute(request: clientRequest, delegate: accumulator, deadline: nil, logger: logger)
 				.futureResult
 				.get()
-			return ClientResponse(status: response.status, headers: response.headers, body: response.body)
+			let filteredHeaders = ProxyResponseHeaders.filtered(response.headers, bodyByteCount: response.body?.readableBytes ?? 0)
+			return ClientResponse(status: response.status, headers: filteredHeaders, body: response.body)
 		} catch is ResponseAccumulator.ResponseTooBigError {
 			throw Abort(.badGateway, reason: "Upstream response exceeds the \(maxBytes) byte proxy limit.")
 		}
+	}
+}
+
+/// Decides which upstream response headers a proxied response keeps.
+enum ProxyResponseHeaders {
+	/// Everything outside this list is dropped.
+	static let forwarded: Set<String> = ["content-type", "content-encoding", "content-disposition", "cache-control"]
+
+	/// The upstream headers worth keeping, with `Content-Length` restated from the body we actually hold.
+	static func filtered(_ upstream: HTTPHeaders, bodyByteCount: Int) -> HTTPHeaders {
+		var headers = HTTPHeaders()
+		for (name, value) in upstream where forwarded.contains(name.lowercased()) {
+			headers.add(name: name, value: value)
+		}
+		headers.replaceOrAdd(name: .contentLength, value: "\(bodyByteCount)")
+		return headers
 	}
 }
