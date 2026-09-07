@@ -51,7 +51,9 @@ struct DBUCAppInfoController: RouteCollection {
 			throw Abort(.badRequest, reason: "Invalid URL.")
 		}
 
-		return try await req.proxyGet(urlString)
+		let response = try await req.proxyGet(urlString)
+		try DropboxResponseValidation.validate(response, describing: "App info")
+		return response
 	}
 
 	private func getQueryParam(from keyValue: [Substring.SubSequence]) -> URLQueryItem? {

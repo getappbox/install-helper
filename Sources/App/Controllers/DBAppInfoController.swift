@@ -6,7 +6,6 @@
 //
 
 import Vapor
-import SwiftSoup
 
 /// A controller to handle requests to the `/appinfo/scl/*` endpoint.
 struct DBAppInfoController: RouteCollection {
@@ -45,27 +44,7 @@ struct DBAppInfoController: RouteCollection {
 		}
 
 		let response = try await req.proxyGet(urlString)
-		return try await processResponse(response)
-	}
-
-	func processResponse(_ response: ClientResponse) async throws -> ClientResponse {
-		guard
-			let body = response.body,
-			let htmlData = body.getData(at: 0, length: body.readableBytes),
-			let htmlString = String(data: htmlData, encoding: .utf8) else {
-			return response
-		}
-
-		if response.headers.contentType == .html {
-			let document = try SwiftSoup.parse(htmlString)
-			let title = try document.title().lowercased()
-			if title.contains("deleted") {
-				throw Abort(.notFound, reason: "App info not found on Dropbox.")
-			} else if title.contains("link temporarily disabled") {
-				throw Abort(.locked, reason: "Share link is temporarily disabled by Dropbox.")
-			}
-		}
-
+		try DropboxResponseValidation.validate(response, describing: "App info")
 		return response
 	}
 }

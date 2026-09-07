@@ -45,6 +45,12 @@ struct InstallController: RouteCollection {
 
 		var manifestResponse = try await req.proxyGet(manifestURLString)
 
+		if let noticeTitle = try DropboxResponseValidation.validate(manifestResponse, describing: "Install manifest") {
+			req.logger.warning("Dropbox served an HTML page instead of a manifest, title: \(noticeTitle).")
+			let status = manifestResponse.status.code >= 400 ? manifestResponse.status : .badGateway
+			throw Abort(status, reason: "Dropbox did not return an install manifest for this link.")
+		}
+
 		guard manifestResponse.status == .ok, let body = manifestResponse.body else {
 			return manifestResponse
 		}
@@ -54,6 +60,7 @@ struct InstallController: RouteCollection {
 		}
 
 		manifestResponse.body = updatedBody
+		manifestResponse.headers.remove(name: .contentEncoding)
 		manifestResponse.headers.replaceOrAdd(name: .contentLength, value: "\(updatedBody.readableBytes)")
 		manifestResponse.headers.replaceOrAdd(name: .contentType, value: "application/xml")
 		return manifestResponse
