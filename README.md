@@ -1,3 +1,8 @@
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor%20on%20GitHub-EA4AAA?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sponsors/vineetchoudhary)
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/vineetchoudhary)
+[![Build status](https://img.shields.io/github/actions/workflow/status/getappbox/install-helper/docker-image.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=build)](https://github.com/getappbox/install-helper/actions/workflows/docker-image.yml)
+[![Docker image](https://img.shields.io/badge/ghcr.io-install--helper-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/getappbox/install-helper/pkgs/container/install-helper)
+
 # AppBox Install Helper
 
 The AppBox backend
@@ -8,7 +13,7 @@ The AppBox backend
 | `install.getappbox.com` | Install / proxy layer | `/cors`, `/install/**`, `/appinfo/**` |
 
 **Contents** — [Quick start](#quick-start) · [Configuration](#configuration) ·
-[API reference](#api-reference) · [Deployment](#deployment) · [Operations](#operations)
+[API reference](#api-reference) · [Deployment](#deployment) · [Operations](#operations) · [Support](#support)
 
 ---
 
@@ -187,3 +192,17 @@ per request.
 3. **Self-sweeping token cache** — Vapor's memory cache never sweeps expired-but-unread keys,
    so Dropbox token verdicts use a bounded cache that does.
 4. **`MALLOC_ARENA_MAX=2`** — set in both the Docker image and `installhelper.service`; glibc arena fragmentation otherwise ratchets RSS on multi-core Linux. If you run the binary outside those two paths, export `MALLOC_ARENA_MAX=2` yourself.
+
+## Support
+
+If AppBox has been useful to you, consider supporting its continued development.
+
+<a href="https://github.com/sponsors/vineetchoudhary">
+  <img src="https://img.shields.io/badge/Sponsor%20on%20GitHub-EA4AAA?style=for-the-badge&logo=github&logoColor=white" alt="Sponsor on GitHub" height="50">
+</a>
+&nbsp;
+<a href="https://buymeacoffee.com/vineetchoudhary">
+  <img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" height="50">
+</a>
+
+Thank you for supporting open source! 🙏
